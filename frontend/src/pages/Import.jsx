@@ -288,11 +288,10 @@ export default function ImportPage() {
         <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">ประวัติการ Import ({history.length})</summary>
         <div className="overflow-x-auto border-t border-slate-100">
           <table className="w-full">
-            <thead className="border-b border-slate-200 bg-slate-50"><tr>{['#', 'เวลา', 'ไฟล์ / ชีต', 'โหมด', 'ทั้งหมด', 'ใช้ได้', 'เพิ่ม', 'อัปเดต', 'ข้าม', 'Error', 'ผิดปกติ', ''].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
+            <thead className="border-b border-slate-200 bg-slate-50"><tr>{['เวลา', 'ไฟล์ / ชีต', 'โหมด', 'ทั้งหมด', 'ใช้ได้', 'เพิ่ม', 'อัปเดต', 'ข้าม', 'Error', 'ผิดปกติ', ''].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-slate-100">
               {history.map((h) => (
                 <tr key={h.id}>
-                  <td className="td">{h.id}</td>
                   <td className="td whitespace-nowrap tabular-nums">{new Date(h.created_at).toLocaleString('th-TH')}</td>
                   <td className="td">{h.file_name} <span className="text-xs text-slate-400">/ {h.sheet_name}</span></td>
                   <td className="td">{h.mode === 'overwrite' ? <Badge tone="amber">overwrite</Badge> : <Badge>skip</Badge>}</td>
@@ -302,7 +301,7 @@ export default function ImportPage() {
                   <td className="td text-right"><button className="btn btn-danger" onClick={() => rollback(h)}>ลบ batch ({h.rows_now})</button></td>
                 </tr>
               ))}
-              {history.length === 0 && <tr><td className="td text-center text-slate-400" colSpan={12}>ยังไม่มีประวัติการ import</td></tr>}
+              {history.length === 0 && <tr><td className="td text-center text-slate-400" colSpan={11}>ยังไม่มีประวัติการ import</td></tr>}
             </tbody>
           </table>
         </div>

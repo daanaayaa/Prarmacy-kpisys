@@ -11,7 +11,7 @@ import { MONTHS, dash, mmss, num, pct, targetLabel } from '../lib/format.js';
 const FLOW = ['#0b2a4a', '#0d9488', '#f59e0b'];
 const tip = { fontSize: 12, borderRadius: 6, border: '1px solid #e2e8f0' };
 const MIN_SAMPLE = 20; // กลุ่ม / ward ที่มี order น้อยกว่านี้จะแสดงจางลง (ตัวอย่างน้อย)
-const RANK_GRID = 'grid grid-cols-[minmax(0,1.5fr)_56px_minmax(56px,1fr)_60px_52px] items-center gap-3';
+const RANK_GRID = 'grid grid-cols-[minmax(0,1.5fr)_56px_minmax(56px,1fr)_60px] items-center gap-3';
 const ICON = {
   list: <path d="M6 7h12M6 12h12M6 17h8" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
@@ -81,6 +81,7 @@ const Alert = ({ n, color, text }) => (
 // ตารางอันดับ (กลุ่มยา / Ward): หัวตารางล็อก, เลื่อนในกรอบความสูงคงที่
 // จอง scrollbar ไว้ทั้งสองฝั่ง (scrollbar-gutter) เพื่อให้คอลัมน์ตรงกัน
 // rows = [{ key, name, total, pct }]
+// goal = ถ้าส่งมา จะแสดงขีดเป้าบนแท่ง (ไม่มีคอลัมน์ vs เป้า)
 function RankTable({ rows, goal }) {
   return (
     <div className="max-h-[340px] overflow-auto [scrollbar-gutter:stable]">
@@ -89,14 +90,11 @@ function RankTable({ rows, goal }) {
         <span className="text-right">Orders</span>
         <span />
         <span className="text-right">% ผ่าน</span>
-        <span className="text-right">{goal != null ? 'vs เป้า' : ''}</span>
       </div>
       <ul className="divide-y divide-slate-100">
         {rows.map((r) => {
           const few = r.total < MIN_SAMPLE;
           const v = r.pct == null ? 0 : Math.max(0, Math.min(100, Number(r.pct)));
-          const diff = goal != null && r.pct != null ? Number(r.pct) - Number(goal) : null;
-          const diffTone = diff == null ? '' : diff >= 0 ? 'text-emerald-600' : diff <= -10 ? 'text-rose-600' : 'text-slate-500';
           return (
             <li key={r.key} className={`${RANK_GRID} py-2 text-sm ${few ? 'opacity-50' : ''}`} title={few ? 'ตัวอย่างน้อย ควรตีความอย่างระมัดระวัง' : undefined}>
               <span className="truncate text-slate-800" title={r.name}>{r.name}</span>
@@ -106,7 +104,6 @@ function RankTable({ rows, goal }) {
                 {goal != null && <span className="absolute -top-0.5 h-3 w-0.5 rounded bg-slate-800/70" style={{ left: `${Math.min(100, Number(goal))}%` }} />}
               </div>
               <span className="text-right font-semibold tabular-nums text-slate-900">{pct(r.pct)}</span>
-              <span className={`text-right text-xs tabular-nums ${diffTone}`}>{diff == null ? '' : `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}`}</span>
             </li>
           );
         })}
@@ -328,10 +325,10 @@ export default function Dashboard() {
             <Panel
               className="h-full"
               title="เปรียบเทียบกลุ่มยา"
-              subtitle={`ปี ${year} · ยา 1 ตัวอาจอยู่ได้หลายกลุ่ม${goal != null ? ` · ขีดดำบนแท่ง = เป้า ${goal}%` : ''}`}
+              subtitle={`ปี ${year} · ยา 1 ตัวอาจอยู่ได้หลายกลุ่ม`}
             >
               <RankTable
-                goal={goal}
+                goal={null}
                 rows={(d?.compare || []).map((g) => ({ key: g.id, name: g.name, total: g.total, pct: g.pct }))}
               />
               {D.loading && !d && <Loading />}
@@ -364,8 +361,6 @@ export default function Dashboard() {
           <Panel title="รายการที่ใช้เวลานานที่สุด" subtitle={`10 อันดับ · ปี ${year} · อาจเป็น outlier ควรตรวจสอบก่อนสรุปผล`}>
             <ol className="grid xl:grid-cols-2 xl:gap-x-10">
               {(d?.top || []).map((t, i) => {
-                const over = t.sec > tgtSec;
-                const x = tgtSec > 0 ? t.sec / tgtSec : null;
                 return (
                   <li key={t.id} className="border-b border-slate-100 py-3">
                     <div className="flex items-center gap-3">
