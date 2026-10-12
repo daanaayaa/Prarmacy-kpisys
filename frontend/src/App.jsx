@@ -43,9 +43,6 @@ export default function App() {
               </NavLink>
             ))}
           </nav>
-          <div className="border-t border-white/10 p-4 text-[11px] leading-snug text-blue-300">
-            DEMO DATABASE<br />ข้อมูลผู้ป่วยถูก mask แล้ว
-          </div>
         </aside>
         <main className="min-w-0 flex-1">
           <nav className="flex gap-1 overflow-x-auto bg-navy-900 p-2 md:hidden">
