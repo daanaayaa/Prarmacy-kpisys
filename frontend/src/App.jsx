@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from './lib/api.js';
+import { useAuth } from './auth/AuthContext.jsx';
+import UserMenu from './auth/UserMenu.jsx';
 import { ErrorBox, Loading } from './components/ui.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Report from './pages/Report.jsx';
@@ -22,6 +24,7 @@ const NAV = [
 ];
 
 export default function App() {
+  const { logout } = useAuth();
   const [meta, setMeta] = useState(null);
   const [error, setError] = useState(null);
   const refresh = useCallback(() => api('/meta').then(setMeta).catch(setError), []);
@@ -43,10 +46,14 @@ export default function App() {
               </NavLink>
             ))}
           </nav>
+          <div className="border-t border-white/10 p-3">
+            <UserMenu variant="dark" stacked />
+          </div>
         </aside>
         <main className="min-w-0 flex-1">
-          <nav className="flex gap-1 overflow-x-auto bg-navy-900 p-2 md:hidden">
+          <nav className="flex items-center gap-1 overflow-x-auto bg-navy-900 p-2 md:hidden">
             {NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `whitespace-nowrap rounded px-3 py-1.5 text-xs text-white ${isActive ? 'bg-white/20' : ''}`}>{n.label}</NavLink>)}
+            <button type="button" onClick={logout} className="ml-auto whitespace-nowrap rounded px-3 py-1.5 text-xs text-blue-200 hover:bg-white/10">ออกจากระบบ</button>
           </nav>
           <div className="mx-auto max-w-[1400px] space-y-4 p-5">
             {error && <ErrorBox error={error} />}

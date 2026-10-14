@@ -5,6 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { PORT } from './config.js';
 import { query } from './db.js';
+import authRoutes from './routes/auth.js';
+import { requireAuth } from './middleware/auth.js';
 import analytics from './routes/analytics.js';
 import importer from './routes/importer.js';
 import admin from './routes/admin.js';
@@ -14,9 +16,15 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
+// เปิดสาธารณะ (ไม่ต้องล็อกอิน): health check และ login
 app.get('/api/health', async (_req, res) => {
   try { await query('SELECT 1'); res.json({ ok: true }); } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+app.use('/api/auth', authRoutes);
+
+// ทุก /api ที่อยู่ต่อจากบรรทัดนี้ต้องล็อกอินก่อน
+app.use('/api', requireAuth);
+
 app.use('/api/import', importer);
 app.use('/api', analytics);
 app.use('/api', filter);
