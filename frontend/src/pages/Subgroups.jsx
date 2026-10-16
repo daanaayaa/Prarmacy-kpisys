@@ -26,6 +26,105 @@ const Chevron = ({ dir }) => (
   </svg>
 );
 
+/* ---------- Dialog (แทน prompt / confirm ของเบราว์เซอร์) ---------- */
+function Dialog({ title, subtitle, onClose, children }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[14vh]">
+      <style>{`
+        @keyframes dlg-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes dlg-pop { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
+        .dlg-fade { animation: dlg-fade .15s ease-out }
+        .dlg-pop { animation: dlg-pop .18s ease-out }
+        @media (prefers-reduced-motion: reduce) { .dlg-fade, .dlg-pop { animation: none } }
+      `}</style>
+      <div className="dlg-fade fixed inset-0 bg-slate-900/40 backdrop-blur-[2px]" onMouseDown={onClose} aria-hidden="true" />
+      <div role="dialog" aria-modal="true" aria-label={title}
+        className="dlg-pop relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-black/5">
+        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+        <div className="mt-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- เลือกสี: จุดสีเดียว กดแล้วเลือก ---------- */
+function ColorDot({ value, onChange }) {
+  return (
+    <label className="inline-flex cursor-pointer items-center gap-3 rounded-lg border border-slate-300 bg-white py-1.5 pl-2 pr-4 text-sm text-slate-700 transition hover:bg-slate-50 focus-within:ring-2 focus-within:ring-blue-200">
+      <span className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-black/10" style={{ background: value }}>
+        <input type="color" aria-label="สีประจำกลุ่ม" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" value={value} onChange={(e) => onChange(e.target.value)} />
+      </span>
+      กดเพื่อเปลี่ยนสี
+    </label>
+  );
+}
+
+/* ---------- Dialog: เพิ่ม Subgroup ---------- */
+function AddGroupDialog({ onClose, onCreate }) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState('#2563eb');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) { setErr('กรุณาพิมพ์ชื่อกลุ่ม'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await onCreate({ name: name.trim(), color });
+      onClose();
+    } catch (ex) {
+      setErr(ex?.message || 'เพิ่มกลุ่มไม่สำเร็จ');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog title="เพิ่มกลุ่มยาใหม่" onClose={busy ? () => {} : onClose}>
+      <form onSubmit={submit} className="space-y-5">
+        <div>
+          <label htmlFor="new-name" className="block text-sm font-medium text-slate-800">ชื่อกลุ่ม</label>
+          <input id="new-name" autoFocus maxLength={60} value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="เช่น Antibiotic, Chemotherapy" className="input mt-1.5 w-full py-2.5 text-base" />
+        </div>
+
+        <div>
+          <div className="mb-1.5 text-sm font-medium text-slate-800">สี</div>
+          <ColorDot value={color} onChange={setColor} />
+        </div>
+
+        {err && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{err}</div>}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn px-5 py-2.5" onClick={onClose} disabled={busy}>ยกเลิก</button>
+          <button type="submit" className="btn btn-primary px-5 py-2.5" disabled={busy}>{busy ? 'กำลังเพิ่ม…' : 'เพิ่มกลุ่ม'}</button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+/* ---------- Dialog: ยืนยันลบ ---------- */
+function DeleteGroupDialog({ group, onClose, onConfirm }) {
+  return (
+    <Dialog title={`ลบกลุ่ม “${group.name}” ?`}
+      subtitle={`กลุ่มนี้มียา ${Number(group.item_count || 0).toLocaleString()} รายการ การลบไม่สามารถย้อนกลับได้`}
+      onClose={onClose}>
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn px-5 py-2.5" autoFocus onClick={onClose}>ยกเลิก</button>
+        <button type="button" className="btn btn-danger px-5 py-2.5" onClick={onConfirm}>ลบกลุ่ม</button>
+      </div>
+    </Dialog>
+  );
+}
+
 export default function Subgroups() {
   const { refresh } = useMeta();
   const [list, setList] = useState(null);
@@ -37,6 +136,8 @@ export default function Subgroups() {
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
   const fileRef = useRef();
 
   // ---- เพิ่มยาเข้ากลุ่ม (search + chips) ----
@@ -121,16 +222,32 @@ export default function Subgroups() {
     setMsg(`นำเข้าบัญชียา ${r.drugs.toLocaleString()} รายการ (ชีต ${r.sheet}) · ` + Object.entries(r.groups).map(([k, v]) => `${k}: ${v}`).join(' · '));
     fileRef.current.value = ''; await load();
   });
-  const saveGroup = wrap(async () => { await api(`/subgroups/${form.id}`, { method: 'PUT', body: form }); await load(form.id); setMsg('บันทึกแล้ว'); });
-  const addGroup = wrap(async () => {
-    const name = prompt('ชื่อ subgroup ใหม่ (เช่น Antibiotic, Chemotherapy)');
-    if (!name) return;
-    const r = await api('/subgroups', { method: 'POST', body: { name } });
-    await load(r.id);
-  });
-  const delGroup = wrap(async () => { if (!confirm(`ลบ subgroup "${sel.name}" ?`)) return; await api(`/subgroups/${sel.id}`, { method: 'DELETE' }); await load(null); });
 
-  // เลื่อนลำดับ subgroup ขึ้น/ลง: สลับตำแหน่งแล้วเรียงเลขใหม่เป็น 10, 20, 30… (อัปเดตเฉพาะรายการที่เลขเปลี่ยน)
+  const saveGroup = wrap(async () => {
+    await api(`/subgroups/${form.id}`, { method: 'PUT', body: { ...form, source_column: (form.source_column || '').trim() } });
+    await load(form.id);
+    setMsg('บันทึกแล้ว');
+  });
+
+  // สร้าง subgroup ใหม่จาก Dialog (โยน error กลับไปให้ Dialog แสดงเอง)
+  const createGroup = async ({ name, color }) => {
+    setError(null); setMsg(null);
+    const r = await api('/subgroups', { method: 'POST', body: { name, color } });
+    // เผื่อ backend รับแค่ชื่อตอนสร้าง → ตั้งสีต่อด้วย PUT
+    const l = await api('/subgroups');
+    const row = l.find((x) => x.id === r.id);
+    if (row && row.color !== color) await api(`/subgroups/${r.id}`, { method: 'PUT', body: { ...row, color } });
+    await load(r.id);
+    refresh();
+    setMsg(`เพิ่มกลุ่ม “${name}” แล้ว`);
+  };
+
+  const doDelete = wrap(async () => {
+    await api(`/subgroups/${sel.id}`, { method: 'DELETE' });
+    await load(null);
+    setMsg('ลบกลุ่มแล้ว');
+  });
+
   // เลื่อนลำดับ subgroup ขึ้น/ลง: สลับตำแหน่งแล้วส่งลำดับใหม่ไปครั้งเดียว
   const moveGroup = (idx, dir) => wrap(async () => {
     const j = idx + dir;
@@ -150,11 +267,12 @@ export default function Subgroups() {
 
   if (!list) return <Loading />;
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+  const col = (form?.source_column || '').trim();
 
   return (
     <>
       <PageHead title="Subgroups & บัญชียา" subtitle="mapping ยาเข้ากลุ่มด้วย ItemCode (ไม่ใช้ชื่อยา) · เพิ่ม subgroup ใหม่ได้เอง">
-        <button className="btn btn-primary" onClick={addGroup}>+ เพิ่ม Subgroup</button>
+        <button className="btn btn-primary" onClick={() => setAdding(true)}>+ เพิ่ม Subgroup</button>
       </PageHead>
       <ErrorBox error={error} />
       {msg && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{msg}</div>}
@@ -163,7 +281,7 @@ export default function Subgroups() {
         <div className="flex flex-wrap items-center gap-3">
           <input ref={fileRef} type="file" accept=".xls,.xlsx" className="text-sm" />
           <button className="btn" onClick={uploadDrugs}>นำเข้า / อัปเดตบัญชียา</button>
-          <span className="text-xs text-slate-500">ระบบอ่านคอลัมน์ ItemCode และคอลัมน์ flag ที่ตรงกับ “คอลัมน์ในบัญชียา” ของแต่ละ subgroup (HAD, Vital, Vaccine, Phlebitis…) แล้ว map ให้อัตโนมัติ</span>
+          <span className="text-xs text-slate-500">เลือกไฟล์ Excel บัญชียา แล้วกดนำเข้า ระบบจะจัดยาเข้ากลุ่ม HAD, Vital, Vaccine, Phlebitis… ให้อัตโนมัติ</span>
         </div>
       </Panel>
 
@@ -199,12 +317,32 @@ export default function Subgroups() {
         {sel && form && (
           <div className="min-w-0 space-y-4">
             <Panel title={sel.name} subtitle={`code: ${sel.code}${sel.is_system ? ' · subgroup ระบบ' : ''}`}
-              actions={<>{!sel.is_system && <button className="btn btn-danger" onClick={delGroup}>ลบ</button>}<button className="btn btn-primary" onClick={saveGroup}>บันทึก</button></>}>
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="md:col-span-2"><Field label="ชื่อ"><input className="input" value={form.name} onChange={set('name')} /></Field></div>
-                <div className="md:col-span-2"><Field label="คอลัมน์ในบัญชียา (map อัตโนมัติ)"><input className="input" placeholder="เช่น High Alert Drug" value={form.source_column || ''} onChange={set('source_column')} /></Field></div>
-                <Field label="สี"><input type="color" className="h-9 w-full rounded border border-slate-300" value={form.color || '#2563eb'} onChange={set('color')} /></Field>
-                <label className="flex items-end gap-2 pb-2 text-sm"><input type="checkbox" checked={form.active} onChange={set('active')} /> เปิดใช้งาน</label>
+              actions={<>{!sel.is_system && <button className="btn btn-danger" onClick={() => setConfirmDel(true)}>ลบ</button>}<button className="btn btn-primary" onClick={saveGroup}>บันทึก</button></>}>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+                  <Field label="ชื่อกลุ่ม"><input className="input" value={form.name} onChange={set('name')} /></Field>
+                  <Field label="สี"><ColorDot value={form.color || '#2563eb'} onChange={(c) => setForm({ ...form, color: c })} /></Field>
+                  <label className="flex h-9 cursor-pointer items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={!!form.active} onChange={set('active')} /> เปิดใช้งาน
+                  </label>
+                </div>
+
+                {/* ตั้งค่าขั้นสูง: ซ่อนไว้ ผู้ใช้ทั่วไปไม่ต้องแตะ */}
+                <details key={sel.id} className="group rounded-lg border border-slate-200 bg-slate-50/60">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm text-slate-600 hover:text-slate-800 [&::-webkit-details-marker]:hidden">
+                    <span className="font-medium">ตั้งค่าขั้นสูง (สำหรับผู้ดูแลระบบ)</span>
+                    <span className="flex items-center gap-2 text-xs text-slate-500">
+                      {col ? `ดึงจากคอลัมน์ “${col}”` : 'ไม่ได้ตั้งค่า'}
+                      <svg className="h-3.5 w-3.5 transition group-open:rotate-180" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 4.5L6 8l3.5-3.5" /></svg>
+                    </span>
+                  </summary>
+                  <div className="border-t border-slate-200 px-3 pb-3 pt-3">
+                    <label htmlFor="source-column" className="block text-sm font-medium text-slate-800">ชื่อคอลัมน์ในไฟล์บัญชียา (Excel)</label>
+                    <input id="source-column" className="input mt-1.5 w-full max-w-sm" placeholder="เช่น High Alert Drug"
+                      value={form.source_column || ''} onChange={set('source_column')} />
+                    <p className="mt-1.5 text-xs text-slate-500">ถ้ากรอก ระบบจะจัดยาเข้ากลุ่มนี้ให้อัตโนมัติทุกครั้งที่นำเข้าไฟล์ · ถ้าไม่ใช้ ปล่อยว่างไว้ แล้วเพิ่มยาเองด้านล่าง</p>
+                  </div>
+                </details>
               </div>
             </Panel>
 
@@ -305,6 +443,11 @@ export default function Subgroups() {
           </div>
         )}
       </div>
+
+      {adding && <AddGroupDialog onClose={() => setAdding(false)} onCreate={createGroup} />}
+      {confirmDel && sel && (
+        <DeleteGroupDialog group={sel} onClose={() => setConfirmDel(false)} onConfirm={() => { setConfirmDel(false); doDelete(); }} />
+      )}
     </>
   );
 }
