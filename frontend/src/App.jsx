@@ -33,21 +33,40 @@ export default function App() {
   return (
     <MetaCtx.Provider value={{ meta, refresh }}>
       <div className="flex min-h-screen">
-        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col self-start bg-navy-900 text-blue-100 md:flex">
-          <div className="shrink-0 border-b border-white/10 px-5 py-4">
-            <div className="text-[11px] uppercase tracking-widest text-blue-300">Hospital Pharmacy</div>
-            <div className="text-base font-semibold text-white">Process Time KPI</div>
+        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col self-start bg-gradient-to-b from-navy-900 via-navy-900 to-[#06173a] text-blue-100 shadow-xl md:flex">
+          <div className="shrink-0 px-4 pb-4 pt-5">
+            <div className="flex h-16 w-full items-center justify-center rounded-xl bg-white px-3 py-2 shadow-lg ring-1 ring-white/20">
+              <img src="/logobsk.png" alt="Bangkok Hospital Siriroj" className="h-full w-full object-contain" />
+            </div>
+            <div className="mt-4 min-w-0 px-1 leading-tight">
+              <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-sky-300/90">Pharmacy Department</div>
+              <div className="mt-1 text-[17px] font-semibold tracking-tight text-white">Process Time KPI</div>
+            </div>
+            <div className="mt-4 h-px bg-gradient-to-r from-white/25 via-white/10 to-transparent" />
           </div>
-          <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-3">
+          <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3">
+            <div className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-300/60">Menu</div>
             {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} className={({ isActive }) => `flex items-center gap-2.5 rounded-md px-3 py-2 text-sm ${isActive ? 'bg-white/15 font-medium text-white' : 'hover:bg-white/10'}`}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={n.icon} /></svg>
-                {n.label}
+              <NavLink
+                key={n.to}
+                to={n.to}
+                className={({ isActive }) => `group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors before:absolute before:-left-3 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:transition-all ${isActive ? 'bg-white/10 font-medium text-white before:bg-sky-400' : 'text-blue-100/80 before:bg-transparent hover:bg-white/5 hover:text-white'}`}
+              >
+                {({ isActive }) => (
+                  <>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${isActive ? 'bg-sky-400/20 text-sky-200' : 'bg-white/5 text-blue-200 group-hover:bg-white/10'}`}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={n.icon} /></svg>
+                    </span>
+                    {n.label}
+                  </>
+                )}
               </NavLink>
             ))}
           </nav>
-          <div className="shrink-0 border-t border-white/10 p-3">
-            <UserMenu variant="dark" stacked />
+          <div className="shrink-0 p-3">
+            <div className="rounded-xl bg-white/5 p-2 ring-1 ring-white/10">
+              <UserMenu variant="dark" stacked />
+            </div>
           </div>
         </aside>
         <main className="min-w-0 flex-1">

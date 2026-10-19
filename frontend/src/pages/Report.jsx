@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { useMeta } from '../App.jsx';
 import { api, qs } from '../lib/api.js';
 import { Empty, ErrorBox, Loading, Panel, useAsync, useStored } from '../components/ui.jsx';
@@ -14,13 +15,57 @@ const hms = (sec) => {
   return `${p(Math.floor(t / 3600))}:${p(Math.floor((t % 3600) / 60))}:${p(t % 60)}`;
 };
 
+// ---- Fit-to-width: ย่อ/ขยายตัวอักษรและ padding ตามความกว้างของ container ----
+const BASE_WIDTH = 1100; // ความกว้างที่ใช้ฟอนต์ขนาดเต็ม
+const BASE_FONT = 12; // px ที่ BASE_WIDTH
+const MIN_FONT = 6.5;
+const MAX_FONT = 14;
+
+function useFitFont() {
+  const ref = useRef(null);
+  const [font, setFont] = useState(BASE_FONT);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const update = () => {
+      const w = el.clientWidth || BASE_WIDTH;
+      setFont(Math.min(MAX_FONT, Math.max(MIN_FONT, (BASE_FONT * w) / BASE_WIDTH)));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, font];
+}
+
+// ตารางที่พอดีความกว้างเสมอ: ไม่มี scroll แนวนอน เห็นครบทุกคอลัมน์
+function FitTable({ children }) {
+  const [ref, font] = useFitFont();
+  return (
+    <div ref={ref} className="-m-4 overflow-hidden">
+      <table className="w-full table-fixed border-collapse" style={{ fontSize: `${font}px` }}>
+        <colgroup>
+          <col style={{ width: '15%' }} />
+          {MONTHS.map((m) => <col key={m} style={{ width: '6%' }} />)}
+          <col style={{ width: '13%' }} />
+        </colgroup>
+        {children}
+      </table>
+    </div>
+  );
+}
+
 const HEAD = (
   <tr className="bg-navy-900 text-white">
-    <th className="sticky left-0 bg-navy-900 px-3 py-2 text-left text-xs font-semibold">Total</th>
-    {MONTHS.map((m) => <th key={m} className="px-3 py-2 text-right text-xs font-semibold">{m}</th>)}
-    <th className="bg-navy-700 px-3 py-2 text-right text-xs font-semibold">Year Total/Avg</th>
+    <th className="bg-navy-900 px-[0.6em] py-[0.7em] text-left text-[0.95em] font-semibold">Total</th>
+    {MONTHS.map((m) => <th key={m} className="px-[0.3em] py-[0.7em] text-right text-[0.95em] font-semibold">{m}</th>)}
+    <th className="bg-navy-700 px-[0.4em] py-[0.7em] text-right text-[0.95em] font-semibold leading-tight">Year Total/Avg</th>
   </tr>
 );
+
+const LABEL_CLS = 'px-[0.6em] py-[0.7em] text-slate-700 break-words leading-tight';
+const CELL_CLS = 'px-[0.3em] py-[0.7em] text-right tabular-nums';
 
 function KpiTable({ kpi, months, year, fromOrder = [], endKey, prev }) {
   const cols = [...months, year];
@@ -46,24 +91,22 @@ function KpiTable({ kpi, months, year, fromOrder = [], endKey, prev }) {
 
   return (
     <Panel title={kpi.name} subtitle={`เกณฑ์ผ่าน ${targetLabel(kpi)}${goal != null ? ` · เป้า % ผ่าน ${goal}%` : ''}${kpi.subgroup_name ? ` · เฉพาะ ${kpi.subgroup_name}` : ''}`} className="overflow-hidden">
-      <div className="-m-4 overflow-x-auto">
-        <table className="w-full min-w-[1000px] border-collapse">
-          <thead>{HEAD}</thead>
-          <tbody>
-            {rows.map(([label, fn, cls = '', isPct, labelCls = 'bg-white']) => (
-              <tr key={label} className="border-b border-slate-100">
-                <td className={`sticky left-0 px-3 py-2 text-sm text-slate-700 ${labelCls}`}>{label}</td>
-                {cols.map((c, i) => {
-                  const txt = fn(c, i);
-                  let tone = '';
-                  if (isPct && c.total && goal != null) tone = c.pct >= goal ? 'text-emerald-600' : 'text-amber-600';
-                  return <td key={i} className={`px-3 py-2 text-right text-sm tabular-nums ${i === 12 ? 'bg-blue-50/60 font-semibold' : ''} ${cls} ${tone} ${txt === '-' ? 'text-slate-300' : ''}`}>{txt}</td>;
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <FitTable>
+        <thead>{HEAD}</thead>
+        <tbody>
+          {rows.map(([label, fn, cls = '', isPct, labelCls = 'bg-white']) => (
+            <tr key={label} className="border-b border-slate-100">
+              <td className={`${LABEL_CLS} ${labelCls}`}>{label}</td>
+              {cols.map((c, i) => {
+                const txt = fn(c, i);
+                let tone = '';
+                if (isPct && c.total && goal != null) tone = c.pct >= goal ? 'text-emerald-600' : 'text-amber-600';
+                return <td key={i} className={`${CELL_CLS} ${i === 12 ? 'bg-blue-50/60 font-semibold' : ''} ${cls} ${tone} ${txt === '-' ? 'text-slate-300' : ''}`}>{txt}</td>;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </FitTable>
     </Panel>
   );
 }
@@ -71,21 +114,19 @@ function KpiTable({ kpi, months, year, fromOrder = [], endKey, prev }) {
 function StepsTable({ steps }) {
   return (
     <Panel title="Process Time แต่ละขั้นตอน (เฉลี่ยรายเดือน)" subtitle="Doctor → Execute → Dispense → Administration" className="overflow-hidden">
-      <div className="-m-4 overflow-x-auto">
-        <table className="w-full min-w-[1000px] border-collapse">
-          <thead>{HEAD}</thead>
-          <tbody>
-            {steps.map((s) => (
-              <tr key={s.key} className="border-b border-slate-100">
-                <td className="sticky left-0 bg-white px-3 py-2 text-sm text-slate-700">{s.label}</td>
-                {[...s.months, s.year].map((c, i) => (
-                  <td key={i} className={`px-3 py-2 text-right text-sm tabular-nums ${i === 12 ? 'bg-blue-50/60 font-semibold' : ''} ${c.n ? '' : 'text-slate-300'}`}>{c.n ? hms(c.avg_sec) : '-'}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <FitTable>
+        <thead>{HEAD}</thead>
+        <tbody>
+          {steps.map((s) => (
+            <tr key={s.key} className="border-b border-slate-100">
+              <td className={`${LABEL_CLS} bg-white`}>{s.label}</td>
+              {[...s.months, s.year].map((c, i) => (
+                <td key={i} className={`${CELL_CLS} ${i === 12 ? 'bg-blue-50/60 font-semibold' : ''} ${c.n ? '' : 'text-slate-300'}`}>{c.n ? hms(c.avg_sec) : '-'}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </FitTable>
     </Panel>
   );
 }

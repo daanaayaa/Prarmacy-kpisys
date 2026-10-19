@@ -4,11 +4,12 @@ import { useAuth } from '../auth/AuthContext';
 /* ===== ค่าที่แก้เองได้ ===== */
 const IT_PHONE = '1122';
 const APP_VERSION = '3.4.1';
-// ตัวเลขในการ์ดฝั่งซ้ายเป็นภาพตัวอย่างประกอบ ไม่ใช่ข้อมูลจริงของระบบ
+const LOGO_SRC = '/logobsk.png';
+// การ์ดฝั่งซ้ายเป็นภาพประกอบแสดงขั้นตอนการทำงาน ไม่ใช่ข้อมูลจริงของระบบ
 const SAMPLE_STEPS = [
-  { icon: 'doc', label: '1. แพทย์สั่งยา', avg: '3.2', color: 'text-cyan-300', dot: 'bg-cyan-400' },
-  { icon: 'flask', label: '2. เภสัชกรจ่ายยา', avg: '6.5', color: 'text-emerald-400', dot: 'bg-emerald-400' },
-  { icon: 'heart', label: '3. พยาบาลให้ยา', avg: '4.1', color: 'text-cyan-300', dot: 'bg-cyan-400' },
+  { icon: 'doc', label: '1. แพทย์สั่งยา', dot: 'bg-cyan-400' },
+  { icon: 'flask', label: '2. เภสัชกรจ่ายยา', dot: 'bg-emerald-400' },
+  { icon: 'heart', label: '3. พยาบาลให้ยา', dot: 'bg-cyan-400' },
 ];
 const SAMPLE_BARS = [24, 33, 41, 49, 55, 42, 64];
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -78,6 +79,26 @@ function useHealth() {
   return status;
 }
 
+// ย่อทั้งหน้าให้พอดีหน้าจอ (ไม่ให้เลื่อน) เมื่อย่อหน้าต่างหรือจอเตี้ย
+const DESIGN_H_WIDE = 960; // ความสูงของหน้าตอนจอกว้าง (2 คอลัมน์)
+const DESIGN_H_NARROW = 1120; // ความสูงของหน้าตอนจอแคบ (คอลัมน์เดียว)
+const DESIGN_MIN_W = 360;
+function useFitScale() {
+  const [fit, setFit] = useState({ s: 1, h: typeof window === 'undefined' ? 900 : window.innerHeight });
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const dh = w >= 1024 ? DESIGN_H_WIDE : DESIGN_H_NARROW;
+      setFit({ s: Math.min(1, Math.max(0.4, Math.min(h / dh, w / DESIGN_MIN_W))), h });
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return fit;
+}
+
 function useClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -91,6 +112,7 @@ export default function Login() {
   const { login } = useAuth();
   const health = useHealth();
   const now = useClock();
+  const { s: scale, h: viewH } = useFitScale();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -127,7 +149,7 @@ export default function Login() {
 
   return (
     <div
-      className="kpi-login relative min-h-screen overflow-hidden text-white"
+      className="kpi-login relative h-screen overflow-hidden text-white"
       style={{
         backgroundColor: '#04122a',
         backgroundImage:
@@ -137,7 +159,15 @@ export default function Login() {
       }}
     >
       <style>{FONT_CSS}</style>
-      <div className="relative mx-auto flex min-h-screen max-w-[1440px] flex-col justify-between gap-8 px-5 py-8 sm:px-10 lg:px-20 lg:py-14">
+      <div
+        style={{
+          width: `${100 / scale}%`,
+          minHeight: `${viewH / scale}px`,
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+        }}
+      >
+      <div className="relative mx-auto flex min-h-[inherit] max-w-[1440px] flex-col justify-between gap-8 px-5 py-8 sm:px-10 lg:px-20 lg:py-8">
         <header className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-cyan-400/60 bg-[#0b2447] text-cyan-300 shadow-[0_0_22px_rgba(34,211,238,0.35)]">
@@ -170,8 +200,8 @@ export default function Login() {
             </span>
 
             <h1 className="kpi-head mt-6 text-3xl font-bold leading-tight xl:text-[40px]">
-              Pharmacy{' '}
-              <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+              <span className="block">Pharmacy Department</span>
+              <span className="mt-1 block bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
                 Process Time KPI
               </span>
             </h1>
@@ -196,7 +226,6 @@ export default function Login() {
                       <span className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#0b1f40] ${s.dot}`} />
                     </span>
                     <p className="mt-3 text-sm text-white/90">{s.label}</p>
-                    <p className={`kpi-mono mt-1 text-xs ${s.color}`}>avg {s.avg} นาที</p>
                   </div>
                 ))}
               </div>
@@ -244,9 +273,13 @@ export default function Login() {
 
             {/* ฟอร์ม จัดกึ่งกลางแนวตั้ง */}
             <div className="my-auto py-10">
-              <div className="mb-8 lg:hidden">
-                <p className="kpi-head text-lg font-bold">
-                  Pharmacy{' '}
+              {/* โลโก้โรงพยาบาลบนการ์ดล็อกอิน */}
+              <div className="mb-8 flex items-center gap-4">
+                <img src={LOGO_SRC} alt="Bangkok Hospital Siriroj" className="h-16 w-auto max-w-[200px] shrink-0 object-contain" />
+                <span className="h-10 w-px shrink-0 bg-slate-200 lg:hidden" aria-hidden="true" />
+                <p className="kpi-head min-w-0 text-base font-bold leading-snug lg:hidden">
+                  Pharmacy Department
+                  <br />
                   <span className="bg-gradient-to-r from-cyan-500 to-blue-600 bg-clip-text text-transparent">Process Time KPI</span>
                 </p>
               </div>
@@ -359,6 +392,7 @@ export default function Login() {
             ศูนย์ประสานงาน IT โทร. <span className="font-semibold text-white/70">{IT_PHONE}</span> (24 ชม.) &nbsp;•&nbsp; BHS Version {APP_VERSION}
           </span>
         </footer>
+      </div>
       </div>
     </div>
   );
