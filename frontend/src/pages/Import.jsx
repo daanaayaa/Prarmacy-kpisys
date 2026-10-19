@@ -37,6 +37,51 @@ function monthLabel(from, to) {
   return a === b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`;
 }
 
+/** หน้าต่างยืนยันแบบ modal (แทน window.confirm ของเบราว์เซอร์) */
+function ConfirmDialog({ title, children, confirmLabel, busyLabel, busy, error, onConfirm, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[16vh]">
+      <style>{`
+        @keyframes dlg-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes dlg-pop { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
+        .dlg-fade { animation: dlg-fade .15s ease-out }
+        .dlg-pop { animation: dlg-pop .18s ease-out }
+        @media (prefers-reduced-motion: reduce) { .dlg-fade, .dlg-pop { animation: none } }
+      `}</style>
+      <div className="dlg-fade fixed inset-0 bg-slate-900/40 backdrop-blur-[2px]" onMouseDown={() => { if (!busy) onClose(); }} aria-hidden="true" />
+      <div role="alertdialog" aria-modal="true" aria-label={title}
+        className="dlg-pop relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-black/5">
+        <div className="flex items-start gap-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3.5 5.5h13M8 5.5V4a1 1 0 011-1h2a1 1 0 011 1v1.5M5.5 5.5l.7 10a1.5 1.5 0 001.5 1.4h4.6a1.5 1.5 0 001.5-1.4l.7-10M8.5 9v4.5M11.5 9v4.5" />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+            <div className="mt-1.5 text-sm leading-relaxed text-slate-600">{children}</div>
+          </div>
+        </div>
+
+        {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</div>}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button type="button" className="btn px-5 py-2.5" autoFocus disabled={busy} onClick={onClose}>ยกเลิก</button>
+          <button type="button" className="btn btn-danger px-5 py-2.5" disabled={busy} onClick={onConfirm}>
+            {busy ? busyLabel : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ImportPage() {
   const { refresh } = useMeta();
   const fileRef = useRef();
@@ -55,8 +100,19 @@ export default function ImportPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
+  // ลบ batch: ใช้ modal แทน window.confirm
+  const [delTarget, setDelTarget] = useState(null);
+  const [delBusy, setDelBusy] = useState(false);
+  const [delErr, setDelErr] = useState(null);
+  const [notice, setNotice] = useState(null);
+
   const loadHistory = () => api('/import/history').then(setHistory).catch(() => {});
   useEffect(() => { loadHistory(); }, []);
+  useEffect(() => {
+    if (!notice) return undefined;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   const preview = async (tok, sh, map) => {
     setBusy(true); setError(null);
@@ -92,9 +148,20 @@ export default function ImportPage() {
     } catch (e) { setError(e); } finally { setBusy(false); }
   };
 
-  const rollback = async (h) => {
-    if (!window.confirm(`ลบข้อมูลทั้งหมดที่นำเข้าใน batch #${h.id} (${h.file_name}) ?`)) return;
-    await api(`/import/${h.id}`, { method: 'DELETE' }); await loadHistory(); refresh();
+  const askRollback = (h) => { setDelErr(null); setDelTarget(h); };
+  const closeRollback = () => { if (!delBusy) { setDelTarget(null); setDelErr(null); } };
+  const confirmRollback = async () => {
+    if (!delTarget) return;
+    setDelBusy(true); setDelErr(null);
+    try {
+      await api(`/import/${delTarget.id}`, { method: 'DELETE' });
+      const id = delTarget.id;
+      setDelTarget(null);
+      setNotice(`ลบข้อมูล batch #${id} เรียบร้อยแล้ว`);
+      await loadHistory(); refresh();
+    } catch (e) {
+      setDelErr(e?.message || 'ลบข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    } finally { setDelBusy(false); }
   };
 
   const s = pv?.stats;
@@ -110,6 +177,13 @@ export default function ImportPage() {
       <PageHead title="Import Excel" subtitle="อัปโหลดไฟล์ข้อมูลดิบจากระบบได้เลย — ระบบคัดกรองให้อัตโนมัติ แล้วให้เลือกยาที่ไม่นำมาคิด KPI ก่อนบันทึก" />
       <Steps step={step} />
       <ErrorBox error={error} />
+
+      {notice && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800" role="status">
+          <svg className="h-4 w-4 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 6.5l2.5 2.5 4.5-5" /></svg>
+          {notice}
+        </div>
+      )}
 
       {result && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
@@ -298,7 +372,7 @@ export default function ImportPage() {
                   <td className="td tabular-nums">{h.total_rows}</td><td className="td tabular-nums text-emerald-700">{h.usable ?? '-'}</td><td className="td tabular-nums">{h.imported}</td>
                   <td className="td tabular-nums">{h.updated}</td><td className="td tabular-nums">{h.skipped}</td>
                   <td className="td tabular-nums">{h.errors}</td><td className="td tabular-nums">{h.anomalies}</td>
-                  <td className="td text-right"><button className="btn btn-danger" onClick={() => rollback(h)}>ลบ batch ({h.rows_now})</button></td>
+                  <td className="td text-right"><button className="btn btn-danger" onClick={() => askRollback(h)}>ลบ batch ({h.rows_now})</button></td>
                 </tr>
               ))}
               {history.length === 0 && <tr><td className="td text-center text-slate-400" colSpan={11}>ยังไม่มีประวัติการ import</td></tr>}
@@ -306,6 +380,24 @@ export default function ImportPage() {
           </table>
         </div>
       </details>
+
+      {delTarget && (
+        <ConfirmDialog
+          title={`ลบข้อมูล batch #${delTarget.id} ?`}
+          confirmLabel="ลบข้อมูล"
+          busyLabel="กำลังลบ…"
+          busy={delBusy}
+          error={delErr}
+          onConfirm={confirmRollback}
+          onClose={closeRollback}
+        >
+          <p>
+            ข้อมูลที่นำเข้าจากไฟล์ <b className="text-slate-800">{delTarget.file_name}</b> จำนวน{' '}
+            <b className="text-slate-800">{n(delTarget.rows_now)}</b> รายการ จะถูกลบออกจากระบบ
+          </p>
+          <p className="mt-2 text-red-600">การลบไม่สามารถย้อนกลับได้</p>
+        </ConfirmDialog>
+      )}
     </>
   );
 }

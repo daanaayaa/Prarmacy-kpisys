@@ -33,12 +33,12 @@ export default function App() {
   return (
     <MetaCtx.Provider value={{ meta, refresh }}>
       <div className="flex min-h-screen">
-        <aside className="hidden w-56 shrink-0 flex-col bg-navy-900 text-blue-100 md:flex">
-          <div className="border-b border-white/10 px-5 py-4">
+        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col self-start bg-navy-900 text-blue-100 md:flex">
+          <div className="shrink-0 border-b border-white/10 px-5 py-4">
             <div className="text-[11px] uppercase tracking-widest text-blue-300">Hospital Pharmacy</div>
             <div className="text-base font-semibold text-white">Process Time KPI</div>
           </div>
-          <nav className="flex-1 space-y-0.5 p-3">
+          <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-3">
             {NAV.map((n) => (
               <NavLink key={n.to} to={n.to} className={({ isActive }) => `flex items-center gap-2.5 rounded-md px-3 py-2 text-sm ${isActive ? 'bg-white/15 font-medium text-white' : 'hover:bg-white/10'}`}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={n.icon} /></svg>
@@ -46,7 +46,7 @@ export default function App() {
               </NavLink>
             ))}
           </nav>
-          <div className="border-t border-white/10 p-3">
+          <div className="shrink-0 border-t border-white/10 p-3">
             <UserMenu variant="dark" stacked />
           </div>
         </aside>

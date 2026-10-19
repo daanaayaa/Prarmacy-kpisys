@@ -22,6 +22,7 @@ const ICON = {
 };
 
 const longDur = (sec) => (sec >= 3600 ? `${Math.floor(sec / 3600)} ชม. ${Math.floor((sec % 3600) / 60)} น.` : mmss(sec));
+const clamp = (v) => Math.max(0, Math.min(100, Number(v) || 0));
 
 const Section = ({ title, children }) => (
   <section className="space-y-3">
@@ -55,28 +56,52 @@ function TakeCard({ tone, icon, label, value, sub }) {
 
 function StatCard({ icon, color, cls, label, value, sub, foot }) {
   return (
-    <div className={`min-w-0 rounded-xl border p-4 ${cls}`}>
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: color }}>
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{ICON[icon]}</svg>
-        </span>
-        <span className="truncate text-sm font-semibold" style={{ color }}>{label}</span>
+    <div className={`flex min-w-0 flex-col justify-between rounded-xl border p-4 shadow-sm ${cls}`}>
+      <div>
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: color }}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{ICON[icon]}</svg>
+          </span>
+          <span className="truncate text-sm font-semibold" style={{ color }}>{label}</span>
+        </div>
+        <div className="mt-3 flex items-end justify-between gap-2">
+          <span className="text-3xl font-semibold leading-none tabular-nums text-slate-900">{value}</span>
+          <span className="text-right text-xs leading-snug text-slate-500">{sub}</span>
+        </div>
       </div>
-      <div className="mt-3 flex items-end justify-between gap-2">
-        <span className="text-2xl font-semibold tabular-nums text-slate-900">{value}</span>
-        <span className="text-right text-xs text-slate-500">{sub}</span>
-      </div>
-      {foot}
+      <div className="min-h-[2.25rem]">{foot}</div>
     </div>
   );
 }
 
-const Alert = ({ n, color, text }) => (
-  <div className="flex items-center gap-3 border-b border-slate-100 py-2.5 first:pt-0 last:border-0">
-    <span className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-semibold text-white" style={{ background: color }}>{n}</span>
-    <span className="text-sm text-slate-700">{text}</span>
+// แท่งสัดส่วนเล็ก ๆ ใต้การ์ด (มีขีดเป้าได้)
+const MiniBar = ({ v, color, goal }) => (
+  <div className="relative mt-3 h-1.5 rounded-full bg-white/80">
+    <div className="h-full rounded-full" style={{ width: `${clamp(v)}%`, background: color }} />
+    {goal != null && <span className="absolute -top-[3px] h-3 w-0.5 rounded bg-slate-800/70" style={{ left: `${clamp(goal)}%` }} title={`เป้า ${goal}%`} />}
   </div>
 );
+
+// แถวรายการติดตาม: ตัวเลขใหญ่ด้านซ้าย + คำอธิบาย + แท่งสัดส่วน (ใส่ children ได้)
+function FollowRow({ color, cls, count, title, note, bar, children }) {
+  return (
+    <div className={`rounded-xl border p-3.5 ${cls}`}>
+      <div className="flex items-start gap-3.5">
+        <span className="flex h-12 min-w-[3.25rem] shrink-0 items-center justify-center rounded-xl px-2 text-lg font-semibold tabular-nums text-white shadow-sm" style={{ background: color }}>{count}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-slate-800">{title}</div>
+          {note && <div className="mt-0.5 text-xs text-slate-500">{note}</div>}
+          {bar != null && (
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/80">
+              <div className="h-full rounded-full" style={{ width: `${clamp(bar)}%`, background: color }} />
+            </div>
+          )}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 // ตารางอันดับ (กลุ่มยา / Ward): หัวตารางล็อก, เลื่อนในกรอบความสูงคงที่
 // จอง scrollbar ไว้ทั้งสองฝั่ง (scrollbar-gutter) เพื่อให้คอลัมน์ตรงกัน
@@ -94,14 +119,14 @@ function RankTable({ rows, goal }) {
       <ul className="divide-y divide-slate-100">
         {rows.map((r) => {
           const few = r.total < MIN_SAMPLE;
-          const v = r.pct == null ? 0 : Math.max(0, Math.min(100, Number(r.pct)));
+          const v = r.pct == null ? 0 : clamp(r.pct);
           return (
             <li key={r.key} className={`${RANK_GRID} py-2 text-sm ${few ? 'opacity-50' : ''}`} title={few ? 'ตัวอย่างน้อย ควรตีความอย่างระมัดระวัง' : undefined}>
               <span className="truncate text-slate-800" title={r.name}>{r.name}</span>
               <span className="text-right text-xs tabular-nums text-slate-500">{dash(r.total)}</span>
               <div className="relative h-2 rounded-full bg-slate-100">
                 <div className="h-full rounded-full bg-slate-500" style={{ width: `${v}%` }} />
-                {goal != null && <span className="absolute -top-0.5 h-3 w-0.5 rounded bg-slate-800/70" style={{ left: `${Math.min(100, Number(goal))}%` }} />}
+                {goal != null && <span className="absolute -top-0.5 h-3 w-0.5 rounded bg-slate-800/70" style={{ left: `${clamp(goal)}%` }} />}
               </div>
               <span className="text-right font-semibold tabular-nums text-slate-900">{pct(r.pct)}</span>
             </li>
@@ -175,6 +200,9 @@ export default function Dashboard() {
       [`สั่งยา → พยาบาลให้ยา นานเกิน ${Q.data.maxHours} ชม.`, qc.OVER_LIMIT],
     ] : [];
     const lostTotal = lost.reduce((a, [, v]) => a + (v || 0), 0);
+    const anomalies = c.anomalies || 0;
+    const rawTotal = (c.total || 0) + lostTotal + anomalies;
+    const cover = rawTotal ? ((c.total || 0) / rawTotal) * 100 : null;
 
     const steps = (cur.steps || []).map((s) => ({ label: s.label.replace(' (avg time)', ''), ...(sel < 0 ? s.year : s.months[sel]) }));
     const sum = steps.reduce((a, s) => a + (s.avg_sec || 0), 0);
@@ -197,49 +225,120 @@ export default function Dashboard() {
         })
       : [];
 
+    const avgOk = c.avg_sec != null && c.avg_sec <= tgtSec;
+
     body = (
       <div className="space-y-6">
         {/* ── 1. ภาพรวมผลงาน ── */}
         <Section title={`ภาพรวมผลงาน · ${label}`}>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard icon="list" color="#e11d48" cls="border-rose-100 bg-rose-50" label="Total Orders" value={num(c.total)} sub={`ประเมินได้ ${label}`} foot={delta(c.total, pc?.total)} />
-            <StatCard icon="check" color="#059669" cls="border-emerald-100 bg-emerald-50" label={`≤ ${kpi.target} ${u}`} value={num(c.pass)} sub={<><b className="text-base text-emerald-700">{c.total ? pct((c.pass / c.total) * 100) : '-'}</b><br />ของทั้งหมด</>} />
-            <StatCard icon="alert" color="#dc2626" cls="border-red-100 bg-red-50" label={`> ${kpi.target} ${u}`} value={num(c.fail)} sub={<><b className="text-base text-red-700">{c.total ? pct((c.fail / c.total) * 100) : '-'}</b><br />ของทั้งหมด</>} />
-            <StatCard icon="clock" color="#2563eb" cls="border-blue-100 bg-blue-50" label="Average Time" value={mmss(c.avg_sec)} sub={`Median ${mmss(c.median_sec)}`} foot={delta(c.avg_sec, pc?.avg_sec, true)} />
+            <StatCard icon="list" color="#e11d48" cls="border-rose-100 bg-rose-50" label="Total Orders" value={num(c.total)} sub={`ประเมินได้ ${label}`}
+              foot={delta(c.total, pc?.total) || <div className="mt-2 text-xs text-slate-400">ไม่มีเดือนก่อนให้เทียบ</div>} />
+            <StatCard icon="check" color="#059669" cls="border-emerald-100 bg-emerald-50" label={`≤ ${kpi.target} ${u}`} value={num(c.pass)}
+              sub={<><b className="text-base text-emerald-700">{c.total ? pct((c.pass / c.total) * 100) : '-'}</b><br />ของทั้งหมด</>}
+              foot={<MiniBar v={c.total ? (c.pass / c.total) * 100 : 0} color="#059669" goal={goal} />} />
+            <StatCard icon="alert" color="#dc2626" cls="border-red-100 bg-red-50" label={`> ${kpi.target} ${u}`} value={num(c.fail)}
+              sub={<><b className="text-base text-red-700">{c.total ? pct((c.fail / c.total) * 100) : '-'}</b><br />ของทั้งหมด</>}
+              foot={<MiniBar v={c.total ? (c.fail / c.total) * 100 : 0} color="#dc2626" />} />
+            <StatCard icon="clock" color="#2563eb" cls="border-blue-100 bg-blue-50" label="Average Time" value={mmss(c.avg_sec)} sub={`Median ${mmss(c.median_sec)}`}
+              foot={<>
+                {delta(c.avg_sec, pc?.avg_sec, true)}
+                <div className={`mt-1 text-xs ${avgOk ? 'text-emerald-600' : 'text-slate-500'}`}>เป้าเฉลี่ย ≤ {mmss(tgtSec)}</div>
+              </>} />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Panel title="อัตราผ่านเกณฑ์เทียบเป้า" subtitle={`≤ ${kpi.target} ${u} · ${label}`}>
-              <div className="relative">
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie data={[{ v: c.pass || 0 }, { v: c.fail || 0 }]} dataKey="v" innerRadius={50} outerRadius={68} startAngle={90} endAngle={-270} stroke="none">
-                      <Cell fill="#2563eb" /><Cell fill="#e2e8f0" />
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center text-2xl font-semibold tabular-nums text-slate-800">{pct(c.pct)}</div>
-              </div>
-              <div className="text-center text-sm text-slate-500">เป้าหมาย {goal != null ? `≥ ${goal}%` : targetLabel(kpi)}</div>
-              {goal != null && c.pct != null && (
-                <div className={`mt-1 text-center text-xs font-medium ${ok ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {ok ? 'ถึงเป้าแล้ว' : `ต่ำกว่าเป้า ${(goal - c.pct).toFixed(1)} จุด`}
-                </div>
-              )}
-            </Panel>
-
-            <Panel title="รายการที่ต้องติดตาม" subtitle={label}>
-              <Alert n={num(c.fail || 0)} color="#e11d48" text={`เกินเวลา (> ${kpi.target} ${u})`} />
-              <Alert n={num(lostTotal)} color="#f59e0b" text={(
-                <div>
-                  <div>ข้อมูลสูญหาย (ไม่ครบตามกฎคัดกรอง)</div>
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
-                    {lost.map(([t, v]) => <span key={t}>{t} <b className="tabular-nums text-slate-700">{num(v || 0)}</b></span>)}
+          <div className="grid items-stretch gap-4 md:grid-cols-2">
+            <Panel className="h-full" title="อัตราผ่านเกณฑ์เทียบเป้า" subtitle={`≤ ${kpi.target} ${u} · ${label}`}>
+              <div className="flex flex-col items-center justify-center gap-7 py-2 md:min-h-[480px]">
+                <div className="relative h-72 w-72 max-w-full shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={[{ v: c.pass || 0 }, { v: c.fail || 0 }]} dataKey="v" innerRadius="74%" outerRadius="98%" startAngle={90} endAngle={-270} stroke="none">
+                        <Cell fill="#2563eb" /><Cell fill="#fecdd3" />
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-5xl font-semibold tabular-nums text-slate-900">{pct(c.pct)}</span>
+                    <span className="mt-1 text-sm text-slate-500">ผ่านเกณฑ์</span>
                   </div>
                 </div>
-              )} />
-              <Alert n={num(c.anomalies || 0)} color="#6366f1" text="ข้อมูลผิดปกติ (เวลาย้อนหลัง / เกิน 24 ชม.)" />
-              <a className="mt-2 block text-xs text-blue-700 underline" href={exp('orders', 'csv')}>ดาวน์โหลดรายการทั้งหมด (CSV)</a>
+
+                <div className="grid w-full max-w-md grid-cols-2 gap-2">
+                  <div className="flex items-center justify-between gap-3 rounded-lg bg-blue-50 px-3 py-2">
+                    <span className="flex items-center gap-2 text-sm text-slate-700"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" />ผ่านเกณฑ์</span>
+                    <b className="tabular-nums text-slate-900">{num(c.pass)}</b>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-lg bg-rose-50 px-3 py-2">
+                    <span className="flex items-center gap-2 text-sm text-slate-700"><span className="h-2.5 w-2.5 rounded-full bg-rose-300" />ไม่ผ่านเกณฑ์</span>
+                    <b className="tabular-nums text-slate-900">{num(c.fail)}</b>
+                  </div>
+                </div>
+
+                <div className="flex w-full max-w-md items-center justify-between gap-2">
+                  <span className="text-xs text-slate-500">เป้าหมาย <b className="ml-1 text-sm text-slate-800">{goal != null ? `≥ ${goal}%` : targetLabel(kpi)}</b></span>
+                  {goal != null && c.pct != null && (
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ok ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                      {ok ? 'ถึงเป้าแล้ว' : `ต่ำกว่าเป้า ${(goal - c.pct).toFixed(1)} จุด`}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Panel>
+
+            <Panel className="h-full" title="รายการที่ต้องติดตาม" subtitle={label}>
+              <div className="space-y-3">
+                <FollowRow
+                  color="#e11d48" cls="border-rose-100 bg-rose-50/60" count={num(c.fail || 0)}
+                  title={`เกินเวลา (> ${kpi.target} ${u})`}
+                  note={c.total ? `${pct((c.fail / c.total) * 100)} ของ order ที่ประเมินได้` : null}
+                  bar={c.total ? (c.fail / c.total) * 100 : 0}
+                />
+
+                <FollowRow
+                  color="#f59e0b" cls="border-amber-100 bg-amber-50/60" count={num(lostTotal)}
+                  title="ข้อมูลสูญหาย (ไม่ครบตามกฎคัดกรอง)"
+                  note={rawTotal ? `${pct((lostTotal / rawTotal) * 100)} ของ order ทั้งหมดในช่วงนี้` : null}
+                >
+                  <ul className="mt-3 space-y-2 border-t border-amber-100 pt-3">
+                    {lost.map(([t, v]) => (
+                      <li key={t}>
+                        <div className="flex items-baseline justify-between gap-3 text-xs">
+                          <span className="min-w-0 text-slate-600">{t}</span>
+                          <b className="shrink-0 tabular-nums text-slate-800">{num(v || 0)}</b>
+                        </div>
+                        <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/80">
+                          <div className="h-full rounded-full bg-amber-400" style={{ width: `${lostTotal ? ((v || 0) / lostTotal) * 100 : 0}%` }} />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </FollowRow>
+
+                <FollowRow
+                  color="#6366f1" cls="border-indigo-100 bg-indigo-50/60" count={num(anomalies)}
+                  title="ข้อมูลผิดปกติ" note="เวลาย้อนหลัง / เกิน 24 ชม."
+                />
+
+                {cover != null && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                    <div className="flex items-baseline justify-between text-xs">
+                      <span className="font-medium text-slate-600">ความครบถ้วนของข้อมูล</span>
+                      <b className="text-sm tabular-nums text-slate-900">{pct(cover)}</b>
+                    </div>
+                    <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div className="bg-blue-600" style={{ width: `${(c.total / rawTotal) * 100}%` }} title={`ประเมินได้ ${num(c.total)}`} />
+                      <div className="bg-amber-400" style={{ width: `${(lostTotal / rawTotal) * 100}%` }} title={`สูญหาย ${num(lostTotal)}`} />
+                      <div className="bg-indigo-500" style={{ width: `${(anomalies / rawTotal) * 100}%` }} title={`ผิดปกติ ${num(anomalies)}`} />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                      <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-blue-600" />ประเมินได้ {num(c.total)}</span>
+                      <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-amber-400" />สูญหาย {num(lostTotal)}</span>
+                      <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-indigo-500" />ผิดปกติ {num(anomalies)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </Panel>
           </div>
 
@@ -360,28 +459,26 @@ export default function Dashboard() {
         <Section title="รายการที่ต้องตรวจสอบ">
           <Panel title="รายการที่ใช้เวลานานที่สุด" subtitle={`10 อันดับ · ปี ${year} · อาจเป็น outlier ควรตรวจสอบก่อนสรุปผล`}>
             <ol className="grid xl:grid-cols-2 xl:gap-x-10">
-              {(d?.top || []).map((t, i) => {
-                return (
-                  <li key={t.id} className="border-b border-slate-100 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${i < 3 ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>{i + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-slate-800" title={t.item_name}>{t.item_name}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600">{t.ward}</span>
-                          <span className="tabular-nums">{t.t_order.slice(0, 16)}</span>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="whitespace-nowrap text-base font-semibold tabular-nums text-slate-900">{longDur(t.sec)}</div>
+              {(d?.top || []).map((t, i) => (
+                <li key={t.id} className="border-b border-slate-100 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${i < 3 ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>{i + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-slate-800" title={t.item_name}>{t.item_name}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600">{t.ward}</span>
+                        <span className="tabular-nums">{t.t_order.slice(0, 16)}</span>
                       </div>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full bg-slate-400" style={{ width: `${Math.max(3, (t.sec / topMax) * 100)}%` }} />
+                    <div className="shrink-0 text-right">
+                      <div className="whitespace-nowrap text-base font-semibold tabular-nums text-slate-900">{longDur(t.sec)}</div>
                     </div>
-                  </li>
-                );
-              })}
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-slate-400" style={{ width: `${Math.max(3, (t.sec / topMax) * 100)}%` }} />
+                  </div>
+                </li>
+              ))}
             </ol>
             {D.loading && !d && <Loading />}
             {d && d.top.length === 0 && <Empty />}
