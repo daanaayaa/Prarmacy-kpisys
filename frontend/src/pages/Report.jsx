@@ -173,12 +173,13 @@ function TabBar({ tabs, value, onChange }) {
   };
 
   return (
-    <div className="sticky top-2 z-20">
+    // sticky เฉพาะตัวแท็บ + พื้นหลังขาวทึบ (ไม่โปร่งใส) เพื่อไม่ให้เนื้อหาทะลุขึ้นมาซ้อน
+    <div className="sticky top-2 z-30">
       <div
         role="tablist"
         aria-label="หัวข้อรายงาน"
         onKeyDown={onKeyDown}
-        className="relative grid rounded-2xl border border-slate-200 bg-white/90 p-1.5 shadow-sm backdrop-blur"
+        className="relative grid rounded-2xl border border-slate-200 bg-white p-1.5 shadow-md"
         style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
       >
         {/* indicator ที่เลื่อนตามแท็บ */}
@@ -220,7 +221,6 @@ function TabBar({ tabs, value, onChange }) {
           );
         })}
       </div>
-      <p className="mt-2 px-2 text-xs text-slate-500">{tabs[idx].hint}</p>
     </div>
   );
 }
@@ -258,6 +258,7 @@ export default function Report() {
     },
   ];
   const active = tabs.some((t) => t.key === tab) ? tab : 'process';
+  const activeTab = tabs.find((t) => t.key === active);
 
   return (
     <>
@@ -280,6 +281,9 @@ export default function Report() {
           <TabBar tabs={tabs} value={active} onChange={setTab} />
 
           <div key={active} role="tabpanel" className="report-tab-in space-y-4">
+            {/* hint อยู่ในพื้นที่เนื้อหา เลื่อนไปพร้อมกัน ไม่ sticky แล้ว */}
+            <p className="px-2 text-xs text-slate-500">{activeTab.hint}</p>
+
             {active === 'overview' && <QualityTable dq={Q.data} />}
 
             {active === 'process' && (
