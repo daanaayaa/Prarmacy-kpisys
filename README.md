@@ -352,7 +352,7 @@ UPDATE users SET is_active = FALSE WHERE lower(username) = 'pharmacist01';
 
 > ผูกกลุ่มยา / ยาที่ตัดออก ด้วย `item_code` เท่านั้น  
 > ระบบคำนวณ KPI ใช้เฉพาะแถวที่ `excl_reason IS NULL` และยาที่ไม่อยู่ใน `drug_exclusions` ของเดือนนั้น  
-> ดูโครงสร้างตาราง, column types, relation และ ER Diagram ได้ที่ **[SCHEMA.md](./SCHEMA.md)**
+> ดูโครงสร้างตาราง, column types, relation และ ER Diagram ได้ที่ SCHEMA.md **
 
 ---
 
