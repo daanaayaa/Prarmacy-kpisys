@@ -227,7 +227,8 @@ function TabBar({ tabs, value, onChange }) {
 
 export default function Report() {
   const { meta } = useMeta();
-  const [f, setF] = useStored('report-filters', { year: meta.years[0] || '', subgroup: 'all', ward: 'all' });
+  // ฟิลเตอร์ year / subgroup / ward ใช้ร่วมกับหน้า Dashboard (คีย์เดียวกัน)
+  const [f, setF] = useStored('shared-filters', { year: meta.years[0] || '', subgroup: 'all', ward: 'all' });
   const [tab, setTab] = useStored('report-tab', 'process');
   const query = qs(f);
   const { data, loading, error } = useAsync(() => (meta.years.length ? api(`/report?${query}`) : Promise.resolve([])), [query]);
@@ -252,7 +253,7 @@ export default function Report() {
     },
     {
       key: 'missing',
-      label: 'ข้อมูลไม่ครบ',
+      label: 'ข้อมูล counting',
       icon: 'missing',
       hint: 'รายการที่ขาดข้อมูลเวลา (Admin) ซึ่งไม่ถูกนำไปคำนวณ KPI',
     },

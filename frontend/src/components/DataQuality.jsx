@@ -14,7 +14,7 @@ export const REASONS = [
 const n = (v) => (v ? Number(v).toLocaleString() : '0');
 const pctOf = (a, b) => (b ? `${((a / b) * 100).toFixed(1)}%` : '-');
 
-/** แถบสรุปบน Dashboard: ข้อมูลทั้งหมด / ใช้ได้ / ตัดออก ของเดือน (หรือทั้งปี) ที่เลือก + ข้อมูลที่ไม่มีเวลาพยาบาลให้ยาแยกตาม ward */
+/** แถบสรุปบน Dashboard: ข้อมูลทั้งหมด / ใช้ได้ / ตัดออก ของเดือน (หรือทั้งปี) ที่เลือก + order ที่ไม่มีเวลาพยาบาลให้ยาแยกตาม ward */
 export function QualityStrip({ dq, sel, label }) {
   if (!dq) return null;
   const c = sel >= 0 ? dq.months[sel] : dq.year;
@@ -59,7 +59,7 @@ export function QualityStrip({ dq, sel, label }) {
         )}
         {wards.length > 0 && (
           <div className="mt-4 border-t border-slate-100 pt-3">
-            <div className="mb-2 text-xs font-medium text-slate-500">ข้อมูลที่ไม่มีเวลาพยาบาลให้ยา แยกตาม Ward <span className="text-slate-400">(ข้อมูลสูญหาย {n(c.NO_ADMIN)} รายการ)</span></div>
+            <div className="mb-2 text-xs font-medium text-slate-500">Order ที่ไม่มีเวลาพยาบาลให้ยา แยกตาม Ward <span className="text-slate-400">(รวม {n(c.NO_ADMIN)} order · นับเฉพาะกรณีไม่มีเวลาให้ยา)</span></div>
             <div className="flex flex-wrap gap-2">
               {wards.map((w) => (
                 <span key={w.ward} className="inline-flex items-center gap-2 rounded-lg border border-rose-100 bg-rose-50/60 px-2.5 py-1 text-xs text-slate-700">
@@ -127,13 +127,17 @@ export function QualityTable({ dq }) {
   );
 }
 
-/** ข้อมูลที่ไม่มีเวลาพยาบาลให้ยา แยกตาม Ward × เดือน */
+/** Order ที่ไม่มีเวลาพยาบาลให้ยา แยกตาม Ward × เดือน (นับเฉพาะ NO_ADMIN) */
 export function MissingAdminTable({ dq }) {
   const list = dq?.missingAdmin || [];
   if (!list.length) return null;
   const sum = (i) => list.reduce((a, w) => a + (i === 12 ? w.total : w.months[i]), 0);
   return (
-    <Panel title="ข้อมูลที่ไม่มีเวลาพยาบาลให้ยา แยกตาม Ward" subtitle="นับเป็นข้อมูลสูญหาย (ไม่นำไปคำนวณ KPI) — ใช้ติดตามว่า Ward ไหนบันทึกเวลาให้ยาไม่ครบ" className="overflow-hidden">
+    <Panel
+      title="Order ที่ไม่มีเวลาพยาบาลให้ยา แยกตาม Ward"
+      subtitle="นับเฉพาะ order ที่ไม่มีเวลาพยาบาลให้ยา (admin) เท่านั้น — ไม่รวม order ที่ถูกตัดด้วยเหตุผลอื่น เช่น ไม่มีเวลาจ่ายยา, Ward นอก รพ., เวลาย้อนหลัง, นานเกินกำหนด"
+      className="overflow-hidden"
+    >
       <div className="-m-4 overflow-x-auto">
         <table className="w-full min-w-[1000px] border-collapse">
           <thead>{HEAD('Ward')}</thead>

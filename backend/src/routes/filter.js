@@ -32,6 +32,18 @@ r.put('/filter/settings', wrap(async (req, res) => {
 
 r.post('/filter/reclassify', wrap(async (_req, res) => res.json(await reclassifyAll())));
 
+// รายชื่อ ward / location ทั้งหมดในข้อมูลที่นำเข้า (ใช้ทำ autocomplete ในหน้า Data Filter)
+r.get('/filter/locations', wrap(async (_req, res) => {
+  const { rows } = await query(
+    `SELECT TRIM(ward) AS name, count(*)::int AS count
+       FROM orders
+      WHERE ward IS NOT NULL AND TRIM(ward) <> ''
+      GROUP BY TRIM(ward)
+      ORDER BY count DESC, name`
+  );
+  res.json({ items: rows });
+}));
+
 r.get('/filter/drugs', wrap(async (req, res) => res.json(await drugCandidates(req.query))));
 r.get('/filter/drug-exclusions', wrap(async (_req, res) => {
   await expandAllMonths(); // ยาที่เคยตั้ง "ทุกเดือน" -> แตกเป็นรายเดือน (ไม่มีรายการซ่อน/ล็อก)

@@ -180,6 +180,12 @@ export async function compareSubgroups(q, kpi) {
 /* ---------- 6) จำนวนข้อมูลทั้งหมด / ใช้ได้ / ตัดออก (รายเดือน) ---------- */
 export const emptyQuality = () => ({ total: 0, usable: 0, excluded: 0, LOCATION: 0, NO_DISPENSE: 0, NO_ADMIN: 0, NEG_TIME: 0, OVER_LIMIT: 0, DRUG: 0 });
 
+/**
+ * ลำดับการติดป้ายเหตุผล (แถวละ 1 เหตุผล รวมกันเท่ากับ "ตัดออก"):
+ *   1) LOCATION  ward นอก รพ. (ตัดทุกเดือนอยู่แล้ว)
+ *   2) DRUG      ยาที่ user เลือกตัดของเดือนนั้น (ไม่ว่าแถวนั้นจะขาดเวลาอะไร)
+ *   3) NO_DISPENSE / NO_ADMIN / NEG_TIME / OVER_LIMIT  เฉพาะแถวของยาที่ยังนับอยู่
+ */
 export async function dataQuality(q) {
   // ไม่ผูกกับ KPI/subgroup ของ KPI — นับตาม Year / Subgroup / Ward ที่เลือก
   const F = makeFilter(q, null, { ignoreMonth: true, includeExcluded: true });
@@ -188,11 +194,11 @@ export async function dataQuality(q) {
             count(*)::int AS total,
             (count(*) FILTER (WHERE ${USABLE}))::int AS usable,
             (count(*) FILTER (WHERE o.excl_reason = 'LOCATION'))::int AS "LOCATION",
-            (count(*) FILTER (WHERE o.excl_reason = 'NO_DISPENSE'))::int AS "NO_DISPENSE",
-            (count(*) FILTER (WHERE o.excl_reason = 'NO_ADMIN'))::int AS "NO_ADMIN",
-            (count(*) FILTER (WHERE o.excl_reason = 'NEG_TIME'))::int AS "NEG_TIME",
-            (count(*) FILTER (WHERE o.excl_reason = 'OVER_LIMIT'))::int AS "OVER_LIMIT",
-            (count(*) FILTER (WHERE o.excl_reason IS NULL AND ${DRUG_EXCL}))::int AS "DRUG"
+            (count(*) FILTER (WHERE o.excl_reason IS DISTINCT FROM 'LOCATION' AND ${DRUG_EXCL}))::int AS "DRUG",
+            (count(*) FILTER (WHERE o.excl_reason = 'NO_DISPENSE' AND NOT ${DRUG_EXCL}))::int AS "NO_DISPENSE",
+            (count(*) FILTER (WHERE o.excl_reason = 'NO_ADMIN' AND NOT ${DRUG_EXCL}))::int AS "NO_ADMIN",
+            (count(*) FILTER (WHERE o.excl_reason = 'NEG_TIME' AND NOT ${DRUG_EXCL}))::int AS "NEG_TIME",
+            (count(*) FILTER (WHERE o.excl_reason = 'OVER_LIMIT' AND NOT ${DRUG_EXCL}))::int AS "OVER_LIMIT"
        FROM orders o ${F.where} GROUP BY ROLLUP (1)`, F.params);
   const fin = (r) => ({ ...r, excluded: r.total - r.usable });
   const months = MONTHS.map((name, i) => ({ month: i + 1, name, ...emptyQuality() }));
@@ -203,12 +209,12 @@ export async function dataQuality(q) {
   return { months, year };
 }
 
-/** ข้อมูล "ไม่มีเวลาพยาบาลให้ยา" นับแยกตาม ward x เดือน (ไม่รวม ward นอกโรงพยาบาลที่ตัดออกอยู่แล้ว) */
+/** order ที่ "ไม่มีเวลาพยาบาลให้ยา" นับแยกตาม ward x เดือน — เฉพาะยาที่ยังนับอยู่ (ไม่รวมยาที่ตัดออก และไม่รวม ward นอก รพ.) */
 export async function missingAdminByWard(q) {
   const F = makeFilter(q, null, { ignoreMonth: true, includeExcluded: true });
   const { rows } = await query(
     `SELECT coalesce(o.ward, '(ไม่ระบุ)') AS ward, extract(month FROM o.order_date)::int AS m, count(*)::int AS n
-       FROM orders o ${F.and(`o.excl_reason = 'NO_ADMIN'`)} GROUP BY 1, 2`, F.params);
+       FROM orders o ${F.and(`o.excl_reason = 'NO_ADMIN' AND NOT ${DRUG_EXCL}`)} GROUP BY 1, 2`, F.params);
   const month = parseInt(q.month, 10);
   const map = new Map();
   for (const r of rows) {

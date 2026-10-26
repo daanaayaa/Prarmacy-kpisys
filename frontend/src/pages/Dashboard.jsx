@@ -147,7 +147,17 @@ const SortBtn = ({ on, onClick, children }) => (
 export default function Dashboard() {
   const { meta } = useMeta();
   const primary = meta.kpis.find((k) => k.is_primary) || meta.kpis[0];
-  const [f, setF] = useStored('dash-filters', { year: meta.years[0] || '', month: '', subgroup: 'all', ward: 'all', kpi: primary?.id || '' });
+
+  // year / subgroup / ward ใช้ร่วมกับหน้า Monthly Report (คีย์ 'shared-filters')
+  // KPI เก็บแยกเฉพาะ Dashboard
+  const [sh, setSh] = useStored('shared-filters', { year: meta.years[0] || '', subgroup: 'all', ward: 'all' });
+  const [kpiSel, setKpiSel] = useStored('dash-kpi', primary?.id || '');
+  const f = { year: sh.year, month: '', subgroup: sh.subgroup, ward: sh.ward, kpi: kpiSel };
+  const setF = (n) => {
+    setSh({ year: n.year, subgroup: n.subgroup, ward: n.ward });
+    setKpiSel(n.kpi);
+  };
+
   const [per, setPer] = useState(null); // null = เดือนล่าสุดที่มีข้อมูล, -1 = ทั้งปี, 0-11 = เดือน
   const [sortW, setSortW] = useState('orders'); // 'orders' = ตามจำนวน order, 'pct' = % ต่ำสุดก่อน
   const rq = qs({ year: f.year, subgroup: f.subgroup, ward: f.ward });
@@ -196,7 +206,7 @@ export default function Dashboard() {
     const qc = Q.data ? (sel >= 0 ? Q.data.months[sel] : Q.data.year) : null;
     const lost = qc ? [
       ['ไม่มีเวลาเภสัชจ่ายยา', qc.NO_DISPENSE],
-      ['ไม่มีเวลาพยาบาลให้ยา', qc.NO_ADMIN],
+      ['ไม่มีเวลาพยาบาลให้ยา (counting)', qc.NO_ADMIN],
       [`สั่งยา → พยาบาลให้ยา นานเกิน ${Q.data.maxHours} ชม.`, qc.OVER_LIMIT],
     ] : [];
     const lostTotal = lost.reduce((a, [, v]) => a + (v || 0), 0);
