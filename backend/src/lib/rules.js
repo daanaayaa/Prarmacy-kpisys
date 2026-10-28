@@ -12,13 +12,15 @@ import { norm } from './parse.js';
  * ส่วน "ยาที่ user เลือกตัดออก" ทำตอนคำนวณ (ตาราง drug_exclusions) จึงแก้ได้ทันทีโดยไม่ต้อง import ใหม่
  */
 export const REASONS = {
+  DRUG: 'ยาที่เลือกตัดออก',
   LOCATION: 'ward นอกโรงพยาบาล (Airport / Rawai / Khaolak Clinic)',
   NO_DISPENSE: 'ไม่มีเวลาเภสัชจ่ายยา',
   NO_ADMIN: 'ไม่มีเวลาพยาบาลให้ยา',
   NEG_TIME: 'ลำดับเวลาผิดปกติ (เวลาย้อนหลัง)',
   OVER_LIMIT: 'แพทย์สั่ง → พยาบาลให้ยา นานเกินกำหนด',
 };
-export const REASON_KEYS = Object.keys(REASONS);
+// REASON_KEYS ใช้ตัวเดิม แต่ต้องไม่รวม DRUG เพราะ classCounts ใช้เฉพาะกฎข้อมูลดิบ
+export const REASON_KEYS = Object.keys(REASONS).filter((k) => k !== 'DRUG');
 
 export const DEFAULT_SETTINGS = {
   max_order_nurse_hours: 8,

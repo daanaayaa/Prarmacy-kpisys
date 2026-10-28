@@ -8,14 +8,26 @@ import { classify, REASON_KEYS, DEFAULT_SETTINGS } from '../lib/rules.js';
 
 const TS_FIELDS = ['t_order', 't_prepare', 't_verify', 't_dispense', 't_nurse', 't_ipd'];
 
-/** วิเคราะห์ชีต: แปลงทุกแถว ตรวจ error / duplicate / anomaly (ยังไม่เขียน DB) */
-export function analyzeSheet(wb, sheetName, mappingIn, settings = DEFAULT_SETTINGS) {
+/**
+ * วิเคราะห์ชีต: แปลงทุกแถว ตรวจ error / duplicate / anomaly (ยังไม่เขียน DB)
+ *
+ * excludedCodes = รายการ item_code ที่ผู้ใช้เลือกตัดออก (Set หรือ Array)
+ * ลำดับการนับ: ตัดยาก่อน -> แถวที่เหลือจึงนับตามกฎข้อมูลดิบ (classify)
+ *   usable + drugExcluded + excluded = valid
+ * หมายเหตุ: excl_reason ที่บันทึกลง DB ยังคำนวณจาก classify() เหมือนเดิม
+ *           เพราะการตัดยาทำตอนคำนวณ KPI (ตาราง drug_exclusions)
+ */
+export function analyzeSheet(wb, sheetName, mappingIn, settings = DEFAULT_SETTINGS, excludedCodes = []) {
+  const drugOutSet = excludedCodes instanceof Set
+    ? excludedCodes
+    : new Set((Array.isArray(excludedCodes) ? excludedCodes : []).map((c) => String(c).trim()).filter(Boolean));
   const { rows, headers, headerRow } = readSheet(wb, sheetName);
   const mapping = mappingIn && Object.keys(mappingIn).length ? mappingIn : autoMapping(headers);
   const missingRequired = REQUIRED_FIELDS.filter((f) => mapping[f] == null || mapping[f] === '');
   const out = { sheet: sheetName, headers, headerRow, mapping, missingRequired, records: [], errors: [], stats: {
     rows: rows.length, blank: 0, footer: 0, valid: 0, errors: 0, repeatedInFile: 0, anomalies: 0, missingByField: {},
-    usable: 0, excluded: 0, verifyFilled: 0, classCounts: Object.fromEntries(REASON_KEYS.map((k) => [k, 0])), missingAdminByWard: [],
+    usable: 0, excluded: 0, drugExcluded: 0, verifyFilled: 0,
+    classCounts: Object.fromEntries(REASON_KEYS.map((k) => [k, 0])), missingAdminByWard: [],
   } };
   if (missingRequired.length) return out;
 
@@ -23,8 +35,8 @@ export function analyzeSheet(wb, sheetName, mappingIn, settings = DEFAULT_SETTIN
   const seen = new Map();
   TS_FIELDS.forEach((f) => { out.stats.missingByField[f] = 0; });
   let minD = null; let maxD = null;
-  const adminMissing = new Map(); // ward -> จำนวนแถวที่ไม่มีเวลาพยาบาลให้ยา
-  const drugMap = new Map();      // item_code -> ยาที่มีแถว "ใช้ได้" ในไฟล์ (ให้ user เลือกตัดก่อนบันทึก)
+  const adminMissing = new Map(); // ward -> จำนวนแถวที่ไม่มีเวลาพยาบาลให้ยา (เฉพาะยาที่ไม่ถูกตัด)
+  const drugMap = new Map();      // item_code -> ยาทุกตัวในไฟล์ (n = ทุกแถว, n_usable = แถวที่ผ่านกฎข้อมูลดิบ)
 
   rows.forEach((row, i) => {
     const rowNo = out.headerRow + 2 + i; // เลขแถวใน Excel
@@ -69,14 +81,24 @@ export function analyzeSheet(wb, sheetName, mappingIn, settings = DEFAULT_SETTIN
 
     const ward = cleanStr(get(row, 'ward'));
     const excl_reason = classify({ ward, ...ts }, settings);
-    if (excl_reason) {
+
+    // รายการยาให้เลือกตัด: เก็บทุกแถว (ไม่ขึ้นกับกฎเวลา) เพื่อให้ยาไม่หายจากรายการ
+    const dm = drugMap.get(item_code) || { item_code, item_name: cleanStr(get(row, 'item_name')), n: 0, n_usable: 0 };
+    dm.n++;
+    if (!excl_reason) dm.n_usable++;
+    drugMap.set(item_code, dm);
+
+    // 1) ตัดยาก่อน  2) แถวที่เหลือจึงนับตามกฎข้อมูลดิบ
+    if (drugOutSet.has(item_code)) {
+      out.stats.drugExcluded++;
+    } else if (excl_reason) {
       out.stats.excluded++; out.stats.classCounts[excl_reason]++;
-      if (excl_reason === 'NO_ADMIN') adminMissing.set(ward || '(ไม่ระบุ)', (adminMissing.get(ward || '(ไม่ระบุ)') || 0) + 1);
+      if (excl_reason === 'NO_ADMIN') {
+        const w = ward || '(ไม่ระบุ)';
+        adminMissing.set(w, (adminMissing.get(w) || 0) + 1);
+      }
     } else {
       out.stats.usable++;
-      const dm = drugMap.get(item_code) || { item_code, item_name: cleanStr(get(row, 'item_name')), n: 0 };
-      dm.n++;
-      drugMap.set(item_code, dm);
     }
 
     out.records.push({
@@ -120,7 +142,10 @@ export async function commitImport({ analysis, fileName, mode, drugExclusions = 
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [fileName, analysis.sheet, mode, analysis.stats.rows - analysis.stats.blank - analysis.stats.footer, analysis.stats.errors, analysis.stats.anomalies,
         JSON.stringify(analysis.mapping), JSON.stringify(analysis.errors.slice(0, 100)),
-        JSON.stringify({ usable: analysis.stats.usable, excluded: analysis.stats.excluded, classCounts: analysis.stats.classCounts, missingAdminByWard: analysis.stats.missingAdminByWard })]);
+        JSON.stringify({
+          usable: analysis.stats.usable, excluded: analysis.stats.excluded, drugExcluded: analysis.stats.drugExcluded,
+          classCounts: analysis.stats.classCounts, missingAdminByWard: analysis.stats.missingAdminByWard,
+        })]);
     const importId = b.rows[0].id;
     const recs = analysis.records.map((r) => ({ ...r, import_id: importId }));
     const CH = 300;

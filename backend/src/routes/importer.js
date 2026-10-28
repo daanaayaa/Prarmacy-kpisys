@@ -30,19 +30,33 @@ r.post('/upload', upload.single('file'), wrap(async (req, res) => {
   res.json({ token, fileName: store.get(token).fileName, sheets, defaultSheet: best?.name, fields: FIELD_LABELS, required: REQUIRED_FIELDS });
 }));
 
+/**
+ * body.excludeCodes (ไม่บังคับ) = ยาที่ผู้ใช้ติ๊กตัดอยู่ตอนนี้ -> ใช้นับ "ตัดยาก่อน"
+ * ถ้าไม่ส่งมา (เช่น เปิด preview ครั้งแรก) ใช้ยาที่ตัดไว้แล้วของเดือนที่อยู่ในไฟล์แทน
+ */
 r.post('/preview', wrap(async (req, res) => {
-  const { token, sheet, mapping } = req.body || {};
+  const { token, sheet, mapping, excludeCodes } = req.body || {};
   const s = store.get(token);
   if (!s) return res.status(410).json({ error: 'ไฟล์หมดอายุ กรุณาอัปโหลดใหม่' });
   const settings = await getSettings();
-  const a = analyzeSheet(s.wb, sheet, mapping, settings);
-  const dupInDb = a.records.length ? await countExisting(a.records.map((x) => x.dedupe_key)) : 0;
-  // ยาที่ตัดออกไว้แล้ว (ของเดือนที่อยู่ในไฟล์ + กฎ "ทุกเดือน") ให้ติ๊กไว้ล่วงหน้า
+
+  // รอบแรก: อ่านไฟล์เพื่อรู้ว่ามีข้อมูลเดือนไหนบ้าง
+  let a = analyzeSheet(s.wb, sheet, mapping, settings);
   const months = [...new Set(a.records.map((x) => x.order_date.slice(0, 7)))];
   await expandAllMonths(months); // ยาที่เคยตั้ง "ทุกเดือน" -> แตกเป็นรายเดือน ให้ติ๊กออก/เพิ่มของเดือนนี้ได้
   const ex = months.length ? (await query(`SELECT month_key, item_code FROM drug_exclusions WHERE month_key = ANY($1)`, [[...months, '*']])).rows : [];
+
+  // ชุดยาที่ใช้ตัด: ที่ผู้ใช้ติ๊กอยู่ตอนนี้ หรือถ้ายังไม่ส่งมา ใช้ที่ตัดไว้แล้วในระบบ
+  const chosen = Array.isArray(excludeCodes)
+    ? [...new Set(excludeCodes.map((c) => String(c).trim()).filter(Boolean))]
+    : [...new Set(ex.map((x) => x.item_code))];
+
+  // รอบสอง: นับใหม่โดยตัดยาก่อน (ตัวเลขใน stats จะตรงกับที่ Dashboard คำนวณ)
+  if (chosen.length && !a.missingRequired.length) a = analyzeSheet(s.wb, sheet, mapping, settings, chosen);
+
+  const dupInDb = a.records.length ? await countExisting(a.records.map((x) => x.dedupe_key)) : 0;
   res.json({
-    drugs: a.drugs, existingExclusions: ex, months,
+    drugs: a.drugs, existingExclusions: ex, months, excludedCodes: chosen,
     sheet: a.sheet, headers: a.headers, mapping: a.mapping, missingRequired: a.missingRequired,
     stats: { ...a.stats, dupInDb, willImport: a.records.length - dupInDb },
     settings, reasons: REASONS,
@@ -56,7 +70,7 @@ r.post('/commit', wrap(async (req, res) => {
   const { token, sheet, mapping, mode, confirmOverwrite, excludeCodes, listedCodes } = req.body || {};
   const s = store.get(token);
   if (!s) return res.status(410).json({ error: 'ไฟล์หมดอายุ กรุณาอัปโหลดใหม่' });
-  const a = analyzeSheet(s.wb, sheet, mapping, await getSettings());
+  const a = analyzeSheet(s.wb, sheet, mapping, await getSettings(), Array.isArray(excludeCodes) ? excludeCodes : []);
   if (a.missingRequired.length) return res.status(400).json({ error: `ยังไม่ได้เลือกคอลัมน์ที่จำเป็น: ${a.missingRequired.join(', ')}` });
   const m = mode === 'overwrite' ? 'overwrite' : 'skip';
   if (m === 'overwrite') {
@@ -65,7 +79,11 @@ r.post('/commit', wrap(async (req, res) => {
   }
   const result = await commitImport({ analysis: a, fileName: s.fileName, mode: m, drugExclusions: Array.isArray(excludeCodes) ? { codes: excludeCodes, listed: listedCodes } : null });
   store.delete(token);
-  res.json({ ...result, usable: a.stats.usable, excluded: a.stats.excluded, classCounts: a.stats.classCounts, missingAdminByWard: a.stats.missingAdminByWard });
+  res.json({
+    ...result,
+    usable: a.stats.usable, excluded: a.stats.excluded, drugExcluded: a.stats.drugExcluded,
+    classCounts: a.stats.classCounts, missingAdminByWard: a.stats.missingAdminByWard,
+  });
 }));
 
 r.get('/history', wrap(async (_req, res) => {
