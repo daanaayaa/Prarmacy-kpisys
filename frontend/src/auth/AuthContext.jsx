@@ -22,30 +22,64 @@ const saveToken = (token, remember) => {
 
 // ครอบ fetch ครั้งเดียว: แนบ token ให้ทุกคำสั่งที่ยิงไป /api/ ของโค้ดเดิมโดยไม่ต้องแก้ไฟล์อื่น
 // และถ้า server ตอบ 401 (token หมดอายุ) จะพากลับหน้าล็อกอินอัตโนมัติ
+
 if (typeof window !== 'undefined' && !window.__kpiFetchPatched) {
   window.__kpiFetchPatched = true;
+
   const originalFetch = window.fetch.bind(window);
 
   window.fetch = async (input, init = {}) => {
-    const url = typeof input === 'string' ? input : input?.url ?? String(input);
-    const isApi = url.includes('/api/');
+    const rawUrl = typeof input === 'string'
+      ? input
+      : input?.url ?? String(input);
+
+    // เปลี่ยน API relative URL ให้ไปยัง Backend
+    const isRelativeApi = rawUrl.startsWith('/api/');
+
+    const requestUrl = isRelativeApi && API_BASE
+      ? `${API_BASE}${rawUrl}`
+      : rawUrl;
+
+    const isApi = requestUrl.includes('/api/');
     const token = getToken();
 
+    let requestInput = input;
+
+    // รองรับทั้ง fetch(string) และ fetch(Request)
+    if (isRelativeApi && API_BASE && typeof input !== 'string') {
+      requestInput = new Request(requestUrl, input);
+    } else if (isRelativeApi && API_BASE) {
+      requestInput = requestUrl;
+    }
+
     if (isApi && token) {
-      const headers = new Headers(init.headers || (typeof input !== 'string' ? input.headers : undefined));
-      if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+      const sourceHeaders = init.headers ||
+        (typeof input !== 'string' ? input.headers : undefined);
+
+      const headers = new Headers(sourceHeaders || {});
+
+      if (!headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+
       init = { ...init, headers };
     }
 
-    const res = await originalFetch(input, init);
+    const res = await originalFetch(requestInput, init);
 
-    if (isApi && res.status === 401 && !url.includes('/api/auth/login')) {
+    if (
+      isApi &&
+      res.status === 401 &&
+      !requestUrl.includes('/api/auth/login')
+    ) {
       clearToken();
       window.dispatchEvent(new Event('auth:expired'));
     }
+
     return res;
   };
 }
+
 
 // ปุ่ม/ลิงก์ดาวน์โหลด (เช่น Export Excel/CSV) ที่เป็น <a href="/api/..."> เบราว์เซอร์เปิดเองจะไม่มี token
 // จึงดักการคลิก แล้วโหลดผ่าน fetch (ที่แนบ token ให้แล้ว) จากนั้นสั่งบันทึกไฟล์
@@ -71,7 +105,9 @@ if (typeof window !== 'undefined' && !window.__kpiDownloadPatched) {
 
     e.preventDefault();
     try {
-      const res = await window.fetch(href);
+      const res = await window.fetch(
+      API_BASE ? `${API_BASE}${href}` : href);
+      
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `HTTP ${res.status}`);
