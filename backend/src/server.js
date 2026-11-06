@@ -21,7 +21,14 @@ const app = express();
 // 1. Basic Middleware
 // ========================================
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://prarmacykpi.vercel.app',
+    'https://prarmacykpi-phnxemrt1-danayas-projects.vercel.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(express.json({ limit: '2mb' }));
 
